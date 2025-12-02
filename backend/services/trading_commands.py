@@ -670,6 +670,28 @@ def place_ai_driven_hyperliquid_order(
                         stop_loss_price=stop_loss_price
                     )
 
+                    # Fallback: If IOC failed due to no liquidity, retry with GTC
+                    if order_result and order_result.get('status') == 'error':
+                        error_msg = order_result.get('error', '')
+                        if 'could not immediately match' in error_msg.lower() or 'no resting orders' in error_msg.lower():
+                            logger.warning(
+                                f"⚠️  IOC order failed for BUY {symbol} (no liquidity), retrying with GTC limit order..."
+                            )
+                            order_result = client.place_order_with_tpsl(
+                                db=db,
+                                symbol=symbol,
+                                is_buy=True,
+                                size=quantity,
+                                price=price_to_use,
+                                leverage=leverage,
+                                time_in_force="Gtc",  # Changed from Ioc to Gtc
+                                reduce_only=False,
+                                take_profit_price=take_profit_price,
+                                stop_loss_price=stop_loss_price
+                            )
+                            if order_result and order_result.get('status') in ['filled', 'resting']:
+                                logger.info(f"✅ GTC fallback order succeeded for BUY {symbol}")
+
                 elif operation == "sell":
                     # Calculate margin first, then position value with leverage
                     margin = available_balance * target_portion
@@ -731,6 +753,28 @@ def place_ai_driven_hyperliquid_order(
                         take_profit_price=take_profit_price,
                         stop_loss_price=stop_loss_price
                     )
+
+                    # Fallback: If IOC failed due to no liquidity, retry with GTC
+                    if order_result and order_result.get('status') == 'error':
+                        error_msg = order_result.get('error', '')
+                        if 'could not immediately match' in error_msg.lower() or 'no resting orders' in error_msg.lower():
+                            logger.warning(
+                                f"⚠️  IOC order failed for SELL {symbol} (no liquidity), retrying with GTC limit order..."
+                            )
+                            order_result = client.place_order_with_tpsl(
+                                db=db,
+                                symbol=symbol,
+                                is_buy=False,
+                                size=quantity,
+                                price=price_to_use,
+                                leverage=leverage,
+                                time_in_force="Gtc",  # Changed from Ioc to Gtc
+                                reduce_only=False,
+                                take_profit_price=take_profit_price,
+                                stop_loss_price=stop_loss_price
+                            )
+                            if order_result and order_result.get('status') in ['filled', 'resting']:
+                                logger.info(f"✅ GTC fallback order succeeded for SELL {symbol}")
 
                 elif operation == "close":
                     position_to_close = None
