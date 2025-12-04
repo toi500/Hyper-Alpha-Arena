@@ -297,7 +297,7 @@ export default function HyperliquidAssetChart({
     <Card className="h-full">
       <div className="h-full relative">
         {/* Time Range Selector */}
-        <div className="absolute top-3 left-3 z-10 flex gap-1 bg-white/90 backdrop-blur-sm rounded-lg p-1 shadow-sm border border-gray-200">
+        <div className="absolute top-3 right-3 z-10 flex gap-1 bg-white/90 backdrop-blur-sm rounded-lg p-1 shadow-sm border border-gray-200">
           {[
             { value: '7d' as const, label: '7D' },
             { value: '15d' as const, label: '15D' },
