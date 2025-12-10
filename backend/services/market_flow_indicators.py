@@ -135,7 +135,6 @@ def _get_cvd_data(
 
     CVD = Cumulative(Taker Buy Notional - Taker Sell Notional)
     """
-    # Query last N periods of data (get enough for 5 data points + some buffer)
     lookback_ms = interval_ms * 10
     start_time = current_time_ms - lookback_ms
 
@@ -150,6 +149,12 @@ def _get_cvd_data(
     ).order_by(MarketTradesAggregated.timestamp).all()
 
     if not records:
+        from datetime import datetime
+        logger.warning(
+            f"CVD insufficient data: symbol={symbol}, period={period}, "
+            f"query_range=[{datetime.utcfromtimestamp(start_time/1000)} - "
+            f"{datetime.utcfromtimestamp(current_time_ms/1000)}], records_found=0"
+        )
         return None
 
     # Aggregate by period
@@ -171,9 +176,13 @@ def _get_cvd_data(
         period_deltas.append(delta)
 
     if not period_deltas:
+        from datetime import datetime
+        logger.warning(
+            f"CVD insufficient data: symbol={symbol}, period={period}, "
+            f"records_found={len(records)}, buckets=0"
+        )
         return None
 
-    # Get last 5 periods
     last_5 = period_deltas[-5:] if len(period_deltas) >= 5 else period_deltas
     current_delta = period_deltas[-1]
     cumulative = sum(period_deltas)
@@ -270,6 +279,12 @@ def _get_oi_data(
     ).order_by(MarketAssetMetrics.timestamp).all()
 
     if not records:
+        from datetime import datetime
+        logger.warning(
+            f"OI insufficient data: symbol={symbol}, period={period}, "
+            f"query_range=[{datetime.utcfromtimestamp(start_time/1000)} - "
+            f"{datetime.utcfromtimestamp(current_time_ms/1000)}], records_found=0"
+        )
         return None
 
     # Aggregate by period - take last value in each bucket
@@ -280,6 +295,11 @@ def _get_oi_data(
 
     sorted_times = sorted(buckets.keys())
     if not sorted_times:
+        from datetime import datetime
+        logger.warning(
+            f"OI insufficient data: symbol={symbol}, period={period}, "
+            f"records_found={len(records)}, buckets=0"
+        )
         return None
 
     # Get OI values
@@ -287,6 +307,11 @@ def _get_oi_data(
     oi_values = [v for v in oi_values if v is not None]
 
     if not oi_values:
+        from datetime import datetime
+        logger.warning(
+            f"OI insufficient data: symbol={symbol}, period={period}, "
+            f"records_found={len(records)}, buckets={len(sorted_times)}, valid_values=0"
+        )
         return None
 
     current_oi = oi_values[-1]
@@ -320,6 +345,12 @@ def _get_oi_delta_data(
     ).order_by(MarketAssetMetrics.timestamp).all()
 
     if not records:
+        from datetime import datetime
+        logger.warning(
+            f"OI_DELTA insufficient data: symbol={symbol}, period={period}, "
+            f"query_range=[{datetime.utcfromtimestamp(start_time/1000)} - "
+            f"{datetime.utcfromtimestamp(current_time_ms/1000)}], records_found=0"
+        )
         return None
 
     # Aggregate by period - take last value in each bucket
@@ -330,6 +361,11 @@ def _get_oi_delta_data(
 
     sorted_times = sorted(buckets.keys())
     if len(sorted_times) < 2:
+        from datetime import datetime
+        logger.warning(
+            f"OI_DELTA insufficient data: symbol={symbol}, period={period}, "
+            f"records_found={len(records)}, buckets={len(sorted_times)}, need_min=2"
+        )
         return None
 
     # Calculate OI changes
@@ -341,6 +377,11 @@ def _get_oi_delta_data(
             oi_changes.append(change_pct)
 
     if not oi_changes:
+        from datetime import datetime
+        logger.warning(
+            f"OI_DELTA insufficient data: symbol={symbol}, period={period}, "
+            f"records_found={len(records)}, buckets={len(sorted_times)}, valid_changes=0"
+        )
         return None
 
     current_change = oi_changes[-1]

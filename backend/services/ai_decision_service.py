@@ -1880,7 +1880,7 @@ def _format_single_indicator(indicator_name: str, indicator_data: Any) -> str:
         Formatted string for prompt
     """
     if not indicator_data:
-        return "N/A"
+        return "N/A (Insufficient data for calculation)"
 
     try:
         if indicator_name.startswith('RSI'):
@@ -2064,7 +2064,7 @@ def _format_flow_indicator(indicator_name: str, indicator_data: Any) -> str:
         Formatted string for prompt (objective data only, no interpretations)
     """
     if not indicator_data:
-        return "N/A"
+        return "N/A (Insufficient data for calculation)"
 
     try:
         period = indicator_data.get("period", "")
@@ -2097,21 +2097,25 @@ def _format_flow_indicator(indicator_name: str, indicator_data: Any) -> str:
         elif indicator_name == "OI":
             current = indicator_data.get("current", 0)
             last_5 = indicator_data.get("last_5", [])
+            is_stale = indicator_data.get("stale", False)
+            age_minutes = indicator_data.get("age_minutes", 0)
 
-            result = [
-                f"Open Interest: {_format_usd(current)}",
-                f"OI last 5: {', '.join(_format_usd(v) for v in last_5)}"
-            ]
+            result = [f"Open Interest: {_format_usd(current)}"]
+            if is_stale and age_minutes > 0:
+                result[0] += f" (data from {age_minutes}min ago)"
+            result.append(f"OI last 5: {', '.join(_format_usd(v) for v in last_5)}")
             return "\n".join(result)
 
         elif indicator_name == "OI_DELTA":
             current = indicator_data.get("current", 0)
             last_5 = indicator_data.get("last_5", [])
+            is_stale = indicator_data.get("stale", False)
+            expanded_window = indicator_data.get("expanded_window", 0)
 
-            result = [
-                f"OI Delta ({period}): {current:+.2f}%",
-                f"OI Delta last 5: {', '.join(f'{c:+.2f}%' for c in last_5)}"
-            ]
+            result = [f"OI Delta ({period}): {current:+.2f}%"]
+            if is_stale and expanded_window > 0:
+                result[0] += f" (expanded {expanded_window}x window)"
+            result.append(f"OI Delta last 5: {', '.join(f'{c:+.2f}%' for c in last_5)}")
             return "\n".join(result)
 
         elif indicator_name == "FUNDING":
