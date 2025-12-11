@@ -11,6 +11,7 @@ import {
   getAccounts,
   getModelChatSnapshots,
   ModelChatSnapshots,
+  getHyperliquidWatchlist,
 } from '@/lib/api'
 import { useArenaData } from '@/contexts/ArenaDataContext'
 import { useTradingMode } from '@/contexts/TradingModeContext'
@@ -92,6 +93,10 @@ export default function AlphaArenaFeed({
   // Snapshot lazy loading cache and states
   const snapshotCache = useRef<Map<number, ModelChatSnapshots>>(new Map())
   const [loadingSnapshots, setLoadingSnapshots] = useState<Set<number>>(new Set())
+
+  // New states for symbol selection
+  const [symbolOptions, setSymbolOptions] = useState<string[]>([])
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null)
 
   // Track seen items for highlight animation
   const seenTradeIds = useRef<Set<number>>(new Set())
@@ -269,11 +274,13 @@ export default function AlphaArenaFeed({
     try {
       setLoadingTrades(true)
       const accountId = activeAccount === 'all' ? undefined : activeAccount
+      const symbol = selectedSymbol || undefined
       const tradeRes = await getArenaTrades({
         limit: DEFAULT_LIMIT,
         account_id: accountId,
         trading_mode: tradingMode,
         wallet_address: walletAddress,
+        symbol: symbol,
       })
       const newTrades = tradeRes.trades || []
       setTrades(newTrades)
@@ -297,7 +304,7 @@ export default function AlphaArenaFeed({
       setLoadingTrades(false)
       return null
     }
-  }, [activeAccount, cacheKey, updateData, tradingMode, walletAddress])
+  }, [activeAccount, cacheKey, updateData, tradingMode, walletAddress, selectedSymbol])
 
   // Helper function to merge and deduplicate model chat entries
   const mergeModelChatData = useCallback((existing: ArenaModelChatEntry[], newData: ArenaModelChatEntry[]) => {
@@ -323,11 +330,13 @@ export default function AlphaArenaFeed({
     try {
       setLoadingModelChat(true)
       const accountId = activeAccount === 'all' ? undefined : activeAccount
+      const symbol = selectedSymbol || undefined
       const chatRes = await getArenaModelChat({
         limit: MODEL_CHAT_LIMIT,
         account_id: accountId,
         trading_mode: tradingMode,
         wallet_address: walletAddress,
+        symbol: symbol,
       })
       const newModelChat = chatRes.entries || []
 
@@ -367,6 +376,7 @@ export default function AlphaArenaFeed({
       setLoadingModelChat(false)
       return null
     }
+
   }, [activeAccount, cacheKey, updateData, tradingMode, walletAddress, modelChat, mergeModelChatData])
 
   // Load more model chat entries (lazy loading)
@@ -410,7 +420,7 @@ export default function AlphaArenaFeed({
       console.error('[AlphaArenaFeed] Failed to load more model chat:', err)
       setIsLoadingMoreModelChat(false)
     }
-  }, [activeAccount, cacheKey, updateData, tradingMode, walletAddress, modelChat, hasMoreModelChat, isLoadingMoreModelChat, mergeModelChatData])
+  }, [activeAccount, cacheKey, updateData, tradingMode, walletAddress, modelChat, hasMoreModelChat, isLoadingMoreModelChat, mergeModelChatData, selectedSymbol])
 
   const loadPositionsData = useCallback(async () => {
     try {
@@ -530,6 +540,33 @@ export default function AlphaArenaFeed({
     }
   }, [activeAccount, loadTradesData, loadModelChatData, loadPositionsData])
 
+  // Fetch watchlist symbols and filter by current positions
+  useEffect(() => {
+    const fetchWatchlist = async () => {
+      try {
+        const response = await getHyperliquidWatchlist();
+        const allSymbols = response.symbols || [];
+
+        setSymbolOptions(allSymbols);
+        if (selectedSymbol && !allSymbols.includes(selectedSymbol)) {
+          setSelectedSymbol(null);
+        }
+      } catch (err) {
+        console.error('Failed to fetch watchlist:', err);
+        setSelectedSymbol(null);
+      }
+    };
+    
+    fetchWatchlist();
+  }, [positions, activeAccount]);
+
+  // Refresh ModelChat when selectedSymbol changes
+  useEffect(() => {
+    loadModelChatData();
+    loadTradesData()
+  }, [selectedSymbol, loadModelChatData, loadTradesData]);
+
+
   const accountOptions = useMemo(() => {
     return allTraderOptions.sort((a, b) => a.name.localeCompare(b.name))
   }, [allTraderOptions])
@@ -640,6 +677,21 @@ export default function AlphaArenaFeed({
             {accountOptions.map((meta) => (
               <option key={meta.account_id} value={meta.account_id}>
                 {meta.name}{meta.model ? ` (${meta.model})` : ''}
+              </option>
+            ))}
+        </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedSymbol || ''}
+            onChange={(e) => setSelectedSymbol(e.target.value || null)}
+            className="h-8 rounded border border-border bg-muted px-2 text-xs uppercase tracking-wide text-foreground"
+            disabled={symbolOptions.length === 0}
+          >
+            <option value="">All Symbols</option>
+            {symbolOptions.map((sym) => (
+              <option key={sym} value={sym}>
+                {sym}
               </option>
             ))}
           </select>

@@ -390,6 +390,7 @@ def get_completed_trades(
     account_id: Optional[int] = None,
     trading_mode: Optional[str] = Query(None, regex="^(paper|testnet|mainnet)$"),
     wallet_address: Optional[str] = Query(None),
+    symbol: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Return recent trades across all AI accounts, filtered by trading mode."""
@@ -412,6 +413,8 @@ def get_completed_trades(
                 query = query.filter(HyperliquidTrade.account_id == account_id)
             if wallet_address:
                 query = query.filter(HyperliquidTrade.wallet_address == wallet_address)
+            if symbol:
+                query = query.filter(HyperliquidTrade.symbol == symbol)
 
             hyper_trades = query.limit(limit).all()
         finally:
@@ -558,6 +561,7 @@ def get_model_chat(
     wallet_address: Optional[str] = Query(None),
     before_time: Optional[str] = Query(None, description="ISO format timestamp for cursor-based pagination"),
     include_snapshots: bool = Query(False, description="Include prompt/reasoning/decision snapshots (heavy data)"),
+    symbol: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Return recent AI decision logs as chat-style summaries, filtered by trading mode."""
@@ -580,6 +584,9 @@ def get_model_chat(
             query = query.filter(AIDecisionLog.decision_time < before_dt)
         except (ValueError, AttributeError) as e:
             logger.warning(f"Invalid before_time parameter: {before_time}, error: {e}")
+
+    if symbol:
+        query = query.filter(AIDecisionLog.symbol == symbol)
 
     # Filter by trading mode based on hyperliquid_environment field
     if trading_mode:
