@@ -220,6 +220,36 @@ def on_startup():
             db.rollback()
             print(f"[startup] Failed to ensure global_sampling_configs.sampling_depth: {migration_err}")
 
+        # Ensure crypto_klines has exchange column (for multi-exchange support)
+        try:
+            result = db.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'crypto_klines'
+            """))
+            columns = {row[0] for row in result}
+
+            if "exchange" not in columns:
+                print("[startup] Adding exchange column to crypto_klines table...")
+                # Add exchange column with default value
+                db.execute(text("""
+                    ALTER TABLE crypto_klines
+                    ADD COLUMN exchange VARCHAR(20) NOT NULL DEFAULT 'hyperliquid'
+                """))
+                # Create index on exchange field
+                db.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_crypto_klines_exchange ON crypto_klines(exchange)
+                """))
+                # Drop old unique constraint (without exchange)
+                db.execute(text("""
+                    ALTER TABLE crypto_klines
+                    DROP CONSTRAINT IF EXISTS crypto_klines_symbol_market_period_timestamp_key
+                """))
+                print("[startup] Successfully added exchange column to crypto_klines")
+            db.commit()
+        except Exception as migration_err:
+            db.rollback()
+            print(f"[startup] Failed to ensure crypto_klines.exchange: {migration_err}")
+
         # Ensure crypto_klines has environment column (for testnet/mainnet isolation)
         try:
             result = db.execute(text("""

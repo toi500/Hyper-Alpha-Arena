@@ -20,38 +20,58 @@ from connection import SessionLocal, engine
 
 
 def upgrade():
-    """Apply the migration"""
+    """Apply the migration (idempotent - safe to run multiple times)"""
     print("Starting migration: add_exchange_to_crypto_klines")
 
     db = SessionLocal()
     try:
-        # Step 1: Add exchange column with default value
-        print("Adding exchange column to crypto_klines table...")
-        db.execute(text("""
-            ALTER TABLE crypto_klines
-            ADD COLUMN exchange VARCHAR(20) NOT NULL DEFAULT 'hyperliquid'
+        # Step 1: Check if exchange column exists
+        result = db.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'crypto_klines' AND column_name = 'exchange'
         """))
+        exchange_exists = result.fetchone() is not None
 
-        # Step 2: Create index on exchange field
+        if not exchange_exists:
+            # Add exchange column with default value
+            print("Adding exchange column to crypto_klines table...")
+            db.execute(text("""
+                ALTER TABLE crypto_klines
+                ADD COLUMN exchange VARCHAR(20) NOT NULL DEFAULT 'hyperliquid'
+            """))
+            print("  ✓ Exchange column added")
+        else:
+            print("  ✓ Exchange column already exists, skipping")
+
+        # Step 2: Create index on exchange field (idempotent)
         print("Creating index on exchange field...")
         db.execute(text("""
-            CREATE INDEX idx_crypto_klines_exchange ON crypto_klines(exchange)
+            CREATE INDEX IF NOT EXISTS idx_crypto_klines_exchange ON crypto_klines(exchange)
         """))
 
-        # Step 3: Drop old unique constraint
+        # Step 3: Drop old unique constraint (idempotent)
         print("Dropping old unique constraint...")
         db.execute(text("""
             ALTER TABLE crypto_klines
             DROP CONSTRAINT IF EXISTS crypto_klines_symbol_market_period_timestamp_key
         """))
 
-        # Step 4: Create new unique constraint including exchange
+        # Step 4: Create new unique constraint including exchange (idempotent)
         print("Creating new unique constraint with exchange field...")
-        db.execute(text("""
-            ALTER TABLE crypto_klines
-            ADD CONSTRAINT crypto_klines_exchange_symbol_market_period_timestamp_key
-            UNIQUE (exchange, symbol, market, period, timestamp)
+        constraint_check = db.execute(text("""
+            SELECT COUNT(*) FROM information_schema.table_constraints
+            WHERE constraint_name = 'crypto_klines_exchange_symbol_market_period_timestamp_key'
+            AND table_name = 'crypto_klines'
         """))
+        if constraint_check.scalar() == 0:
+            db.execute(text("""
+                ALTER TABLE crypto_klines
+                ADD CONSTRAINT crypto_klines_exchange_symbol_market_period_timestamp_key
+                UNIQUE (exchange, symbol, market, period, timestamp)
+            """))
+            print("  ✓ New unique constraint created")
+        else:
+            print("  ✓ Unique constraint already exists, skipping")
 
         db.commit()
         print("Migration completed successfully!")
