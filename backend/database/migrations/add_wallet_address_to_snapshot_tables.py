@@ -23,7 +23,8 @@ def column_exists(inspector, table: str, column: str) -> bool:
     return column in columns
 
 
-def main():
+def upgrade():
+    """Apply the migration - called by migration_manager.py"""
     inspector = inspect(snapshot_engine)
 
     with snapshot_engine.connect() as conn:
@@ -36,6 +37,11 @@ def main():
             print("ℹ️  wallet_address already exists on snapshot hyperliquid_account_snapshots")
 
         conn.commit()
+
+
+def main():
+    """Legacy main function for backward compatibility"""
+    upgrade()
 
 
 if __name__ == "__main__":

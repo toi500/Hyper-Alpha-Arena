@@ -23,6 +23,8 @@ MIGRATIONS = [
     "add_ai_prompt_chat.py",
     "fix_timestamp_bigint.py",
     "create_signal_system_tables.py",
+    "add_wallet_address_to_snapshot_tables.py",
+    "add_wallet_address_to_hyperliquid_trades.py",
 ]
 
 def check_migration_table():

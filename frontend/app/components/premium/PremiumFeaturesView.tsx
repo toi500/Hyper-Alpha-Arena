@@ -13,7 +13,8 @@ import {
   ExternalLink,
   Info,
   Sparkles,
-  Percent
+  Percent,
+  Zap
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '@/contexts/AuthContext'
@@ -499,6 +500,61 @@ export default function PremiumFeaturesView({ onAccountUpdated, onPageChange }: 
                     className="w-full h-8 text-xs"
                   >
                     Launch Analysis
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* AI Signal Generator */}
+              <Card className="border text-card-foreground shadow">
+                <CardHeader className="pb-3">
+                  <div className="space-y-1">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Zap className="w-5 h-5 text-yellow-500" />
+                      AI Signal Generator
+                      <Badge className="bg-green-500 text-white text-xs">Limited Time Free</Badge>
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Transform trading ideas into executable signals using natural language - no technical knowledge required
+                    </CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-2">
+                    <div className="p-2 bg-muted/50 rounded-lg">
+                      <div className="text-xs font-semibold mb-1">Natural Language to Signal</div>
+                      <div className="text-xs text-muted-foreground">
+                        Describe what you want to monitor: &quot;Alert me when BTC open interest surges with high buying pressure&quot;
+                      </div>
+                    </div>
+
+                    <div className="p-2 bg-muted/50 rounded-lg">
+                      <div className="text-xs font-semibold mb-1">Smart Parameter Optimization</div>
+                      <div className="text-xs text-muted-foreground">
+                        AI analyzes market data to suggest optimal thresholds - no guesswork needed
+                      </div>
+                    </div>
+
+                    <div className="p-2 bg-muted/50 rounded-lg">
+                      <div className="text-xs font-semibold mb-1">Multi-Condition Logic</div>
+                      <div className="text-xs text-muted-foreground">
+                        Combine CVD, OI, funding rate, order flow into sophisticated AND/OR signal pools
+                      </div>
+                    </div>
+
+                    <div className="p-2 bg-muted/50 rounded-lg">
+                      <div className="text-xs font-semibold mb-1">Trigger AI Trading</div>
+                      <div className="text-xs text-muted-foreground">
+                        Bind signals to AI accounts - when conditions hit, AI evaluates and executes
+                      </div>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={() => onPageChange?.('signal-management')}
+                    className="w-full h-8 text-xs bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-0"
+                  >
+                    <Zap className="w-3 h-3 mr-1" />
+                    Create Signal with AI
                   </Button>
                 </CardContent>
               </Card>

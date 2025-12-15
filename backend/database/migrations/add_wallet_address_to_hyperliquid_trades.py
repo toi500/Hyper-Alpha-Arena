@@ -22,7 +22,8 @@ def column_exists(inspector, table: str, column: str) -> bool:
     return column in {col["name"] for col in inspector.get_columns(table)}
 
 
-def main() -> None:
+def upgrade() -> None:
+    """Apply the migration - called by migration_manager.py"""
     inspector = inspect(snapshot_engine)
 
     with snapshot_engine.connect() as conn:
@@ -33,6 +34,11 @@ def main() -> None:
             print("ℹ️  wallet_address already exists on hyperliquid_trades")
 
         conn.commit()
+
+
+def main() -> None:
+    """Legacy main function for backward compatibility"""
+    upgrade()
 
 
 if __name__ == "__main__":
