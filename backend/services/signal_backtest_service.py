@@ -959,13 +959,19 @@ class SignalBacktestService:
         for signal_id, sig_def in signal_defs.items():
             condition = sig_def["trigger_condition"]
             metric = condition.get("metric")
-            if metric and metric not in metrics_data:
-                metric_map = {"oi_delta_percent": "oi_delta", "taker_buy_ratio": "taker_ratio"}
-                metric = metric_map.get(metric, metric)
-                raw_data = self._load_raw_data_for_metric(
-                    db, symbol, metric, kline_min_ts, kline_max_ts, interval_ms
-                )
-                metrics_data[metric] = raw_data
+            if metric:
+                # taker_volume uses taker_ratio data internally
+                if metric == "taker_volume":
+                    mapped_metric = "taker_ratio"
+                else:
+                    metric_map = {"oi_delta_percent": "oi_delta", "taker_buy_ratio": "taker_ratio"}
+                    mapped_metric = metric_map.get(metric, metric)
+
+                if mapped_metric not in metrics_data:
+                    raw_data = self._load_raw_data_for_metric(
+                        db, symbol, mapped_metric, kline_min_ts, kline_max_ts, interval_ms
+                    )
+                    metrics_data[mapped_metric] = raw_data
 
         # Generate check points from all data
         all_timestamps = set()
@@ -991,30 +997,79 @@ class SignalBacktestService:
             for signal_id, sig_def in signal_defs.items():
                 condition = sig_def["trigger_condition"]
                 metric = condition.get("metric")
-                operator = condition.get("operator")
-                threshold = condition.get("threshold")
 
-                metric_map = {"oi_delta_percent": "oi_delta", "taker_buy_ratio": "taker_ratio"}
-                metric = metric_map.get(metric, metric)
+                # Handle taker_volume composite signal specially
+                if metric == "taker_volume":
+                    import math
+                    direction = condition.get("direction", "any")
+                    ratio_threshold = condition.get("ratio_threshold", 1.5)
+                    volume_threshold = condition.get("volume_threshold", 0)
+                    log_threshold = math.log(max(ratio_threshold, 1.01))
 
-                raw_data = metrics_data.get(metric, [])
-                value = self._calculate_indicator_at_time(raw_data, metric, check_time, interval_ms)
+                    raw_data = metrics_data.get("taker_ratio", [])
+                    taker_data = self._calc_taker_data_at_time(raw_data, check_time, interval_ms)
 
-                if value is None:
-                    all_met = False
-                    break
+                    if taker_data is None:
+                        all_met = False
+                        break
 
-                condition_met = self._evaluate_condition(value, operator, threshold)
-                if not condition_met:
-                    all_met = False
-                    break
+                    log_ratio = taker_data["log_ratio"]
+                    total_volume = taker_data["volume"]
 
-                signal_values.append({
-                    "signal_id": signal_id,
-                    "signal_name": sig_def["signal_name"],
-                    "value": value,
-                    "threshold": threshold,
-                })
+                    # Check ratio condition
+                    if direction == "buy":
+                        ratio_met = log_ratio >= log_threshold
+                    elif direction == "sell":
+                        ratio_met = log_ratio <= -log_threshold
+                    else:  # any
+                        ratio_met = abs(log_ratio) >= log_threshold
+
+                    # Check volume condition
+                    volume_met = total_volume >= volume_threshold
+
+                    if not (ratio_met and volume_met):
+                        all_met = False
+                        break
+
+                    signal_values.append({
+                        "signal_id": signal_id,
+                        "signal_name": sig_def["signal_name"],
+                        "metric": "taker_volume",
+                        "value": taker_data["ratio"],
+                        "threshold": ratio_threshold,
+                        # taker_volume specific fields for tooltip display
+                        "direction": direction,
+                        "ratio": taker_data["ratio"],
+                        "volume": total_volume,
+                        "ratio_threshold": ratio_threshold,
+                        "volume_threshold": volume_threshold,
+                    })
+                else:
+                    # Standard signal with operator/threshold
+                    operator = condition.get("operator")
+                    threshold = condition.get("threshold")
+
+                    metric_map = {"oi_delta_percent": "oi_delta", "taker_buy_ratio": "taker_ratio"}
+                    mapped_metric = metric_map.get(metric, metric)
+
+                    raw_data = metrics_data.get(mapped_metric, [])
+                    value = self._calculate_indicator_at_time(raw_data, mapped_metric, check_time, interval_ms)
+
+                    if value is None:
+                        all_met = False
+                        break
+
+                    condition_met = self._evaluate_condition(value, operator, threshold)
+                    if not condition_met:
+                        all_met = False
+                        break
+
+                    signal_values.append({
+                        "signal_id": signal_id,
+                        "signal_name": sig_def["signal_name"],
+                        "value": value,
+                        "threshold": threshold,
+                    })
 
             # Pool-level edge detection
             if all_met and not was_active:

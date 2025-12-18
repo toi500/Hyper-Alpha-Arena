@@ -855,28 +855,35 @@ def _combine_signals_with_pool_edge_detection(
             if metric == "taker_volume":
                 direction = sig.get("direction", "any")
                 ratio_threshold = sig.get("ratio_threshold", 1.5)
+                volume_threshold = sig.get("volume_threshold", 0)
                 log_threshold = math.log(max(ratio_threshold, 1.01))
 
                 raw_data = metrics_data.get("taker_ratio", [])
-                ts_index = metrics_indexes.get("taker_ratio")
 
-                value = signal_backtest_service._calculate_indicator_at_time(
-                    raw_data, "taker_ratio", check_time, interval_ms, ts_index
+                # Use _calc_taker_data_at_time to get both log_ratio and volume
+                taker_data = signal_backtest_service._calc_taker_data_at_time(
+                    raw_data, check_time, interval_ms
                 )
 
-                if value is None:
+                if taker_data is None:
                     all_met = False
                     break
 
-                log_ratio = value
-                if direction == "buy":
-                    condition_met = log_ratio >= log_threshold
-                elif direction == "sell":
-                    condition_met = log_ratio <= -log_threshold
-                else:  # any
-                    condition_met = abs(log_ratio) >= log_threshold
+                log_ratio = taker_data["log_ratio"]
+                total_volume = taker_data["volume"]
 
-                if not condition_met:
+                # Check ratio condition
+                if direction == "buy":
+                    ratio_met = log_ratio >= log_threshold
+                elif direction == "sell":
+                    ratio_met = log_ratio <= -log_threshold
+                else:  # any
+                    ratio_met = abs(log_ratio) >= log_threshold
+
+                # Check volume condition
+                volume_met = total_volume >= volume_threshold
+
+                if not (ratio_met and volume_met):
                     all_met = False
                     break
             else:
@@ -1084,8 +1091,12 @@ def _find_taker_volume_triggers(
     ratio_threshold: float, volume_threshold: float, interval_ms: int
 ) -> List[int]:
     """
-    Find taker_volume trigger timestamps using log ratio comparison.
+    Find taker_volume trigger timestamps using log ratio AND volume threshold.
     Uses edge detection: only triggers on False -> True transitions.
+
+    Both conditions must be met:
+    1. Ratio condition: |log(buy/sell)| >= log(ratio_threshold) for direction
+    2. Volume condition: total_volume (buy + sell) >= volume_threshold
     """
     import math
 
@@ -1103,26 +1114,29 @@ def _find_taker_volume_triggers(
     was_active = False
 
     for check_time in check_points:
-        # Get taker data at this time point
-        # raw_data format: (timestamp, buy, sell, ratio, log_ratio)
-        value = signal_backtest_service._calculate_indicator_at_time(
-            raw_data, "taker_ratio", check_time, interval_ms, ts_index
+        # Get taker data including volume at this time point
+        taker_data = signal_backtest_service._calc_taker_data_at_time(
+            raw_data, check_time, interval_ms
         )
 
-        if value is None:
+        if taker_data is None:
             was_active = False
             continue
 
-        # value is log_ratio from taker_ratio calculation
-        log_ratio = value
-        condition_met = False
+        log_ratio = taker_data["log_ratio"]
+        total_volume = taker_data["volume"]
 
+        # Check BOTH ratio and volume conditions
+        ratio_met = False
         if direction == "buy":
-            condition_met = log_ratio >= log_threshold
+            ratio_met = log_ratio >= log_threshold
         elif direction == "sell":
-            condition_met = log_ratio <= -log_threshold
+            ratio_met = log_ratio <= -log_threshold
         elif direction == "any":
-            condition_met = abs(log_ratio) >= log_threshold
+            ratio_met = abs(log_ratio) >= log_threshold
+
+        volume_met = total_volume >= volume_threshold
+        condition_met = ratio_met and volume_met
 
         # Edge detection: only trigger on False -> True
         if condition_met and not was_active:

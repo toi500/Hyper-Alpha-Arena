@@ -229,14 +229,45 @@ export default function SignalPreviewChart({ klines, triggers, timeWindow, signa
     // Pool trigger with multiple signals (AND logic)
     if (t.triggered_signals && t.triggered_signals.length > 0) {
       return (
-        <div key={idx} className="space-y-1">
-          {t.triggered_signals.map((sig, i) => (
-            <div key={i} className="text-xs">
-              <span className="text-gray-400">{sig.signal_name || 'Signal'}:</span>{' '}
-              <span className="text-white font-mono">{sig.value?.toFixed(4) ?? 'N/A'}</span>
-              <span className="text-gray-500 ml-1">(≥{sig.threshold?.toFixed(4) ?? 'N/A'})</span>
-            </div>
-          ))}
+        <div key={idx} className="space-y-2">
+          {t.triggered_signals.map((sig: any, i: number) => {
+            // Check if this is a taker_volume signal
+            if (sig.metric === 'taker_volume' && sig.direction !== undefined) {
+              const dirColor = sig.direction === 'buy' ? 'text-green-400' : 'text-red-400'
+              const dirLabel = sig.direction === 'buy' ? 'BUY' : 'SELL'
+              const dominantMultiplier = sig.direction === 'sell' && sig.ratio && sig.ratio > 0
+                ? (1 / sig.ratio).toFixed(2)
+                : sig.ratio?.toFixed(2)
+              const dominantLabel = sig.direction === 'buy' ? 'Buyers' : 'Sellers'
+              return (
+                <div key={i} className="text-xs border-l-2 border-gray-600 pl-2">
+                  <div className="text-gray-400 mb-0.5">{sig.signal_name || 'Taker Volume'}</div>
+                  <div>
+                    <span className="text-gray-500">Dir:</span>{' '}
+                    <span className={`font-mono font-medium ${dirColor}`}>{dirLabel}</span>
+                    <span className="text-gray-500 ml-2">{dominantLabel}:</span>{' '}
+                    <span className="text-white font-mono">{dominantMultiplier}x</span>
+                    <span className="text-gray-500 ml-1">(≥{sig.ratio_threshold?.toFixed(1)}x)</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Vol:</span>{' '}
+                    <span className="text-white font-mono">${((sig.volume || 0) / 1e6).toFixed(1)}M</span>
+                    <span className="text-gray-500 ml-1">(≥${((sig.volume_threshold || 0) / 1e6).toFixed(1)}M)</span>
+                  </div>
+                </div>
+              )
+            }
+            // Standard signal
+            return (
+              <div key={i} className="text-xs border-l-2 border-gray-600 pl-2">
+                <div className="text-gray-400 mb-0.5">{sig.signal_name || 'Signal'}</div>
+                <div>
+                  <span className="text-white font-mono">{sig.value?.toFixed(4) ?? 'N/A'}</span>
+                  <span className="text-gray-500 ml-1">(≥{sig.threshold?.toFixed(4) ?? 'N/A'})</span>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )
     }
